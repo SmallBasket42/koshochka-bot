@@ -95,8 +95,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === ЗАПУСК БОТА ===
 
-app = ApplicationBuilder().token(TOKEN).build()
+async def reset_webhook(app):
+    await app.bot.delete_webhook(drop_pending_updates=True)
+
+app = ApplicationBuilder().token(TOKEN).post_init(reset_webhook).build()
 app.add_handler(CommandHandler("meme", meme_command))
 app.add_handler(CallbackQueryHandler(button_callback))
-app.run_polling(drop_pending_updates=True)
+app.run_polling(allowed_updates=Update.ALL_TYPES)
+
 
