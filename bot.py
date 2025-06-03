@@ -31,12 +31,8 @@ def get_apimeme():
 def get_supermeme():
     return {"url": "https://supermeme.ai/sample-meme.jpg", "title": "AI Generated Meme"}
 
-def get_humorapi():
-    r = requests.get("https://humorapi.com/memes/random")
-    data = r.json()
-    return {"url": data["url"], "title": data["title"]}
 
-MEME_SOURCES = [get_meme_api, get_imgflip, get_memegen, get_apimeme, get_supermeme, get_humorapi]
+MEME_SOURCES = [get_meme_api, get_imgflip, get_memegen, get_apimeme, get_supermeme]
 
 def get_keyboard():
     return InlineKeyboardMarkup([
