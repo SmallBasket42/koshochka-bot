@@ -1,17 +1,20 @@
 import os
 import random
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Bot
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, CallbackQueryHandler,
     ContextTypes
 )
 
+# Получаем токен
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
-# Мем-источники (простые картинки)
+# === Мем-источники ===
+
 def get_meme_api():
     r = requests.get("https://meme-api.com/gimme")
     data = r.json()
@@ -19,7 +22,8 @@ def get_meme_api():
 
 def get_nekobot():
     r = requests.get("https://nekobot.xyz/api/image?type=meme")
-    return {"url": r.json()["message"], "title": "НекоБот мем"}
+    data = r.json()
+    return {"url": data["message"], "title": "НекоБот мем"}
 
 def get_static_ru():
     return {"url": "https://memes.znanio.ru/wp-content/uploads/2023/07/mem-1.jpg", "title": "Znanio мем"}
@@ -34,20 +38,34 @@ def get_keyboard():
         [InlineKeyboardButton("🔁 Ещё мем", callback_data="more_meme")]
     ])
 
-async def send_meme(update_or_query, context: ContextTypes.DEFAULT_TYPE):
-    meme = random.choice(MEME_SOURCES)()
-    if not meme["url"].endswith((".jpg", ".jpeg", ".png", ".gif", ".webp")) and "picsum.photos" not in meme["url"]:
-        raise ValueError("Unsupported image format")
+# === Отправка мема ===
 
-    if isinstance(update_or_query, Update):
-        await update_or_query.message.reply_photo(
-            photo=meme["url"], caption=meme["title"], reply_markup=get_keyboard()
-        )
-    else:
-        await update_or_query.edit_message_media(
-            media=InputMediaPhoto(media=meme["url"], caption=meme["title"]),
-            reply_markup=get_keyboard()
-        )
+async def send_meme(update_or_query, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        meme = random.choice(MEME_SOURCES)()
+        if not any(meme["url"].endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]) and "picsum.photos" not in meme["url"]:
+            raise ValueError("Unsupported image format")
+
+        if isinstance(update_or_query, Update):
+            await update_or_query.message.reply_photo(
+                photo=meme["url"], caption=meme["title"], reply_markup=get_keyboard()
+            )
+        else:
+            await update_or_query.edit_message_media(
+                media=InputMediaPhoto(media=meme["url"], caption=meme["title"]),
+                reply_markup=get_keyboard()
+            )
+    except Exception as e:
+        print("Ошибка при отправке мема:", e)
+        try:
+            if isinstance(update_or_query, Update):
+                await update_or_query.message.reply_text("Ошибка. Попробуй позже.")
+            else:
+                await update_or_query.edit_message_caption(caption="Ошибка. Попробуй позже.")
+        except:
+            pass
+
+# === Команды ===
 
 async def meme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_meme(update, context)
@@ -56,14 +74,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await send_meme(update.callback_query, context)
 
-# Удаляем все старые Webhook/Polling подключения
-async def reset_webhook(app):
-    await app.bot.delete_webhook(drop_pending_updates=True)
+# === Удаление старого Webhook ===
 
-app = ApplicationBuilder().token(TOKEN).post_init(reset_webhook).build()
+async def delete_previous_webhook():
+    bot = Bot(token=TOKEN)
+    await bot.delete_webhook(drop_pending_updates=True)
+
+asyncio.run(delete_previous_webhook())
+
+# === Запуск бота ===
+
+app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("meme", meme_command))
 app.add_handler(CallbackQueryHandler(button_callback))
+
 app.run_polling(
     allowed_updates=Update.ALL_TYPES,
     drop_pending_updates=True
 )
+
